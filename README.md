@@ -27,6 +27,19 @@ $22.15/month
 3. Create a Database: Postgres 14
 4. SSH into the droplet
 
+# Add Swap
+
+```
+# Create 2GB swap file
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+
+# Make it permanent
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
 # Install Dependencies on the Droplet
 
 ```
@@ -38,7 +51,12 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
 
 # Install Postgres client and Ruby
-sudo apt install -y postgresql-client ruby ruby-dev build-essential
+sudo apt install -y \
+  postgresql-client \
+  ruby \
+  ruby-dev \
+  build-essential \
+  libpq-dev
 
 # Install Ruby gems
 sudo gem install asciidoctor asciidoctor-pdf asciidoctor-mermaid rouge
@@ -56,6 +74,7 @@ sudo npm install -g @mermaid-js/mermaid-cli
 
 ```
 sudo mkdir -p /opt/rfd-api
+sudo chown $USER:$USER /opt/rfd-api
 git clone https://github.com/oxidecomputer/rfd-api.git /opt/rfd-api
 cd /opt/rfd-api
 cargo build --release
