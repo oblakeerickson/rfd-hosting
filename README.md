@@ -307,7 +307,14 @@ Configuration updated
 Now create the OAuth client:
 
 ```
-rfd-cli oauth-client create --redirect-uri "https://rfd2site.blake.app/auth/github/callback"
+# 1. Create the OAuth client
+rfd-cli sys oauth create
+# Returns: {"id":"<client-id>", ...}
+
+# 2. Add redirect URI
+rfd-cli sys oauth redirect create --client-id <client-id> --redirect-uri "https://your-site.example.com/auth/github/callback"
+
+# 3. Create client secret
+rfd-cli sys oauth secret create --client-id <client-id>
+# Returns the secret to use in Vercel
 ```
-
-
