@@ -69,6 +69,12 @@ sudo apt install -y nodejs
 sudo npm install -g @mermaid-js/mermaid-cli
 ```
 
+### Install Diesel CLI
+
+```
+cargo install diesel_cli --no-default-features --features postgres
+```
+
 ### Clone and Build rfd-api
 
 
@@ -79,3 +85,229 @@ git clone https://github.com/oxidecomputer/rfd-api.git /opt/rfd-api
 cd /opt/rfd-api
 cargo build --release
 ```
+
+### Create the database and run migrations
+
+Create the db
+```
+DATABASE_URL="postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:25060/rfd?sslmode=require" diesel database create
+```
+
+Run migrations
+
+rfd-installer runs v-api migrations
+```
+cd rfd-model
+V_ONLY=1 DATABASE_URL="postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:25060/rfd?sslmode=require" cargo run -p rfd-installer
+
+DATABASE_URL="postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:25060/rfd?sslmode=require" diesel migration run
+```
+
+### Setup Config Files
+
+Generate RSA Key Pair for JWT Signing
+
+On your local:
+```
+openssl genrsa -out private.pem 2048
+openssl rsa -in private.pem -pubout -out public.pem
+```
+
+These files we will be configuring:
+
+```
+rfd-api/config.toml
+rfd-api/mappers.toml
+rfd-processor/config.toml
+```
+
+Copy example
+
+```
+cd rfd-api
+cp config.example.toml config.toml
+```
+
+Edit config.toml
+
+```
+vim config.toml
+```
+
+Remove cloud key section
+
+Find the `[[keys]]` section and remove the `# CLOUD KMS - Signer` section. For this guide we will be using a local key.
+
+```
+cat private.pem | pbcopy
+cat public.pem | pbcopy
+```
+
+```
+[[keys]]
+kind = "local_signer"
+kid = "rfd-key-1"
+private = """
+-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----
+"""
+
+[[keys]]
+kind = "local_verifier"
+kid = "rfd-key-1"
+public = """
+-----BEGIN PUBLIC KEY-----
+...
+-----END PUBLIC KEY-----
+"""
+```
+
+### Setup DNS
+
+Point the domain you want to use to the Digital Ocean Droplet.
+
+### Setup GitHub OAuth App
+
+```
+[authn.oauth.github.web]
+client_id = ""
+client_secret = ""
+redirect_uri = "https://<rfd-api-hostname>/login/oauth/github/code/callback"
+```
+
+### Setup a github repo for RFDs
+
+```
+git@github.com:oblakeerickson/rfd2.git
+```
+
+Then add it to the config file:
+
+```
+# The GitHub repository to use to write RFDs
+[services.github]
+# GitHub user or organization
+owner = ""
+# GitHub repository name
+repo = ""
+# Path within the repository where RFDs are stored
+path = ""
+# Branch to use as the default branch of the repository
+default_branch = ""
+```
+
+Setup up Fine-grained personal access tokens
+
+contents, metadata, Pull requests (write access?)
+
+delete the other `[services.github.auth]` section so that there is only one in the config file.
+
+# Mappers
+
+```
+cp mappers.example.toml mappers.toml
+```
+
+```
+initial_mappers = "/opt/rfd-api/mappers.toml"
+```
+
+```
+[[groups]]
+name = "admin"
+permissions = [
+  "user:info:r",
+  "user:info:w",
+  "user:provider:w",
+  "user:token:r",
+  "user:token:w",
+  "group:r",
+  "group:w",
+  "group:membership:w",
+  "rfd:content:r",
+  "rfd:content:w",
+  "rfd:discussion:r",
+  "search",
+  "oauth:client:r",
+  "oauth:client:w"
+]
+ 
+[[mappers]]
+name = "Initial admin"
+rule = "email_address"
+email = "your-github-email@example.com"
+groups = [
+  "admin"
+]
+```
+
+### Configure path for openapi spec file
+
+```
+output_path = "/opt/rfd-api/spec/openapi.json"
+```
+
+### Configure reverse proxy
+
+
+Install caddy:
+
+```
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update
+sudo apt install caddy
+```
+
+Configure Caddy:
+
+```
+sudo vim /etc/caddy/Caddyfile
+```
+
+Replace contents with:
+
+```
+rfd2.blake.app {
+    reverse_proxy localhost:8080
+}
+```
+
+Verify it is working by visiting:
+
+```
+https://rfd2.blake.app/.well-known/openid-configuration
+```
+
+and you should see json output.
+
+# Deploy rfd-site to Vercel
+
+First we need to create an OAuth client in the rfd-api so the site can authenticate users.
+
+```
+rfd-cli config set host https://rfd2.blake.app
+```
+You should see: `Configuration updated`
+
+```
+rfd-cli auth login github
+```
+
+And you should see:
+
+```
+To complete login visit: https://github.com/login/device and enter ASDF-1234
+Configuration updated
+
+```
+
+Now create the OAuth client:
+
+```
+rfd-cli oauth-client create --redirect-uri "https://rfd2site.blake.app/auth/github/callback"
+```
+
+
