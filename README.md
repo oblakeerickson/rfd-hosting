@@ -209,30 +209,65 @@ delete the other `[services.github.auth]` section so that there is only one in t
 cp mappers.example.toml mappers.toml
 ```
 
-```
-initial_mappers = "/opt/rfd-api/mappers.toml"
-```
+Edit `config.toml` to point to the mappers file:
 
 ```
+initial_mappers = "/opt/rfd-api/rfd-api/mappers.toml"
+```
+
+Edit `mappers.toml`:
+
+```
+vim mappers.toml
+```
+
+**⚠️ IMPORTANT**: Permissions must use **variant names** (e.g., `"GetApiUserSelf"`), NOT scope strings (e.g., `"user:info:r"`). Using scope strings will cause 403 errors because they deserialize incorrectly.
+
+```toml
 [[groups]]
 name = "admin"
 permissions = [
-  "user:info:r",
-  "user:info:w",
-  "user:provider:w",
-  "user:token:r",
-  "user:token:w",
-  "group:r",
-  "group:w",
-  "group:membership:w",
-  "rfd:content:r",
-  "rfd:content:w",
-  "rfd:discussion:r",
-  "search",
-  "oauth:client:r",
-  "oauth:client:w"
+  # User permissions
+  "GetApiUserSelf",
+  "GetApiUsersAssigned",
+  "GetApiUsersAll",
+  "CreateApiUser",
+  "ManageApiUsersAssigned",
+  "ManageApiUsersAll",
+  "CreateUserApiProviderLinkToken",
+  # API key permissions
+  "GetApiKeysAssigned",
+  "GetApiKeysAll",
+  "CreateApiKeySelf",
+  "CreateApiKeyAssigned",
+  "CreateApiKeyAll",
+  "ManageApiKeysAssigned",
+  "ManageApiKeysAll",
+  # Group permissions
+  "GetGroupsJoined",
+  "GetGroupsAll",
+  "CreateGroup",
+  "ManageGroupsAssigned",
+  "ManageGroupsAll",
+  "ManageGroupMembershipsAssigned",
+  "ManageGroupMembershipsAll",
+  # RFD permissions
+  "GetRfdsAssigned",
+  "GetRfdsAll",
+  "CreateRfd",
+  "UpdateRfdsAssigned",
+  "UpdateRfdsAll",
+  "GetDiscussionsAssigned",
+  "GetDiscussionsAll",
+  "SearchRfds",
+  # OAuth client permissions
+  "GetOAuthClientsAssigned",
+  "GetOAuthClientsAll",
+  "CreateOAuthClient",
+  "ManageOAuthClientsAssigned",
+  "ManageOAuthClientsAll"
 ]
- 
+
 [[mappers]]
 name = "Initial admin"
 rule = "email_address"
