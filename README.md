@@ -1,10 +1,13 @@
 # RFD Site Hosting Guide
 
-This is a guide on how to deploy the rfd-api and rfd-site repos into production.
+This is a guide on how to deploy the [rfd-api](https://github.com/oxidecomputer/rfd-api) and [rfd-site](https://github.com/oxidecomputer/rfd-site) repos into production.
 
 If you want to setup your own RFD website just like Oxide has for your own company this guide is for you.
 
-The current goal of this guide is to just learn how the rfd-api and rfd-site repos work and how to deploy them. This guide is not intended to supercede anything in rfd-api or rfd-site. As I document how things work I hope some useful changes will make it upstream to improve the original oxidecomputer repos.
+The current goal of this guide is to just learn how the rfd-api and rfd-site repos work and how to deploy them. This guide is not intended to supercede anything in rfd-api or rfd-site. As I document how things work I hope some useful changes will make it upstream to improve the original oxidecomputer repos:
+
+- https://github.com/oxidecomputer/rfd-api
+- https://github.com/oxidecomputer/rfd-site
 
 # Accounts/Services you will need
 
@@ -380,6 +383,24 @@ groups = [
 ]
 ```
 
+### Create Your RFD Repository
+
+Before configuring rfd-processor, create a GitHub repository to store your RFDs. From your local machine:
+
+```bash
+cd ~/code
+mkdir my-rfds
+cd my-rfds
+git init
+mkdir -p rfd/0001
+echo "# RFDs" > README.md
+git add .
+git commit -m "Initial commit"
+gh repo create my-rfds --private --source=. --push
+```
+
+Note the owner and repo name (e.g., `oblakeerickson/my-rfds`) - you'll need these for the config.
+
 ### Setup rfd-processor config
 
 ```bash
@@ -388,7 +409,7 @@ cp config.example.toml config.toml
 vim config.toml
 ```
 
-Update the following settings:
+Update the following settings (use your RFD repo from the previous step):
 
 ```toml
 log_format = "pretty"
@@ -412,10 +433,10 @@ actions = [
 [auth.github]
 token = "<your-access-token>"
 
-# GitHub repo settings (same as rfd-api)
+# GitHub repo settings - use YOUR repo from the previous step
 [source]
 owner = "<your-username-or-org>"
-repo = "rfd"
+repo = "my-rfds"
 path = "rfd"
 default_branch = "main"
 ```
@@ -687,3 +708,64 @@ vercel --prod
 ```
 
 Your RFD site should now be live at `https://rfd.yourdomain.com`!
+
+# Create Your First RFD
+
+Now that everything is deployed, add your first RFD to the repository you created earlier.
+
+## Add an RFD to Your Repository
+
+From your local machine, navigate to your RFD repo and create an AsciiDoc file for RFD 1:
+
+```bash
+cd ~/code/my-rfds
+cat > rfd/0001/README.adoc << 'EOF'
+= RFD 1 My First RFD
+Your Name <you@example.com>
+:state: published
+
+== Introduction
+
+This is my first RFD.
+
+== Background
+
+Add background information here.
+
+== Proposal
+
+Describe your proposal here.
+EOF
+```
+
+**AsciiDoc format notes:**
+- Title line: `= RFD 1 Title Here`
+- Author line immediately after title (not as `:authors:` attribute)
+- `:state:` attribute after author line
+- Blank line before content sections
+
+Push to GitHub:
+
+```bash
+git add .
+git commit -m "Add first RFD"
+gh repo create my-rfds --private --source=. --push
+```
+
+## Run rfd-processor to Sync
+
+On the droplet, run the processor to sync RFDs from GitHub to the database:
+
+```bash
+ssh root@rfd-api.yourdomain.com
+cd /opt/rfd-api
+./target/release/rfd-processor
+```
+
+The processor will scan your GitHub repo and import the RFDs. Once complete, refresh your RFD site to see your first RFD!
+
+**Note:** By default, new RFDs are only visible to admins. To make an RFD public, use the CLI:
+
+```bash
+rfd-cli edit visibility --number 1 --visibility public
+```
