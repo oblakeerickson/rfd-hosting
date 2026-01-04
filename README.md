@@ -305,7 +305,7 @@ sudo vim /etc/caddy/Caddyfile
 Replace contents with:
 
 ```
-rfd2.blake.app {
+rfd2-api.blake.app {
     reverse_proxy localhost:8080
 }
 ```
@@ -313,7 +313,7 @@ rfd2.blake.app {
 Verify it is working by visiting:
 
 ```
-https://rfd2.blake.app/.well-known/openid-configuration
+https://rfd2-api.blake.app/.well-known/openid-configuration
 ```
 
 and you should see json output.
@@ -323,7 +323,7 @@ and you should see json output.
 First we need to create an OAuth client in the rfd-api so the site can authenticate users.
 
 ```
-rfd-cli config set host https://rfd2.blake.app
+rfd-cli config set host https://rfd2-api.blake.app
 ```
 You should see: `Configuration updated`
 
@@ -347,7 +347,7 @@ rfd-cli sys oauth create
 # Returns: {"id":"<client-id>", ...}
 
 # 2. Add redirect URI
-rfd-cli sys oauth redirect create --client-id <client-id> --redirect-uri "https://your-site.example.com/auth/github/callback"
+rfd-cli sys oauth redirect create --client-id <client-id> --redirect-uri "https://rfd2.blake.app/auth/github/callback"
 
 # 3. Create client secret
 rfd-cli sys oauth secret create --client-id <client-id>
