@@ -4,6 +4,8 @@ This is a guide on how to deploy the rfd-api and rfd-site repos into production.
 
 If you want to setup your own RFD website just like Oxide has for your own company this guide is for you.
 
+The current goal of this guide is to just learn how the rfd-api and rfd-site repos work and how to deploy them. This guide is not intended to supercede anything in rfd-api or rfd-site. As I document how things work I hope some useful changes will make it upstream to improve the original oxidecomputer repos.
+
 # Accounts/Services you will need
 
 - GitHub Account
@@ -11,6 +13,8 @@ If you want to setup your own RFD website just like Oxide has for your own compa
 - Vercel Account
 
 # Estimated Monthly Hosting Costs
+
+For a basic setup these are the current costs:
 
 ```
 $15.15/month Hosted Postgresql DB
@@ -20,14 +24,20 @@ $0/month Vercel (Free Plan?)
 $22.15/month
 ```
 
+By moving the DB to the droplet you could save on some costs.
+
 # Steps
 
-1. Create a Digital Ocean Project: `rfd2.blake.app`
-2. Create a Droplet: Ubuntu 24.04 (LTS) x64, Premium AMD NVMe SSD $7/mo
-3. Create a Database: Postgres 14
-4. SSH into the droplet
+## Spin up a Droplet
 
-# Add Swap
+1. Create a Digital Ocean Project: `RFD Site`
+2. Create a Droplet: Ubuntu 24.04 (LTS) x64, Premium AMD NVMe SSD $7/mo
+3. Point DNS to the droplet (use 'rfd-api.yourdomain.com' for the subdomain)
+4. SSH into the droplet (`ssh root@rfd-api.yourdomain.com`)
+
+### Add Swap
+
+If you are building rfd-api from source you will need to add swap space to your droplet.
 
 ```
 # Create 2GB swap file
@@ -40,7 +50,14 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-# Install Dependencies on the Droplet
+### Install Dependencies on the Droplet
+
+Add the required repositories:
+```
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+```
 
 ```
 # Update system
@@ -50,20 +67,23 @@ sudo apt update && sudo apt upgrade -y
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
 
-# Install Postgres client and Ruby
+# Install Postgres client, Ruby, Node, Caddy, and other dependencies
+
 sudo apt install -y \
   postgresql-client \
   ruby \
   ruby-dev \
   build-essential \
-  libpq-dev
+  libpq-dev \
+  debian-keyring \
+  debian-archive-keyring \
+  apt-transport-https \
+  curl \
+  caddy \
+  nodejs
 
 # Install Ruby gems
 sudo gem install asciidoctor asciidoctor-pdf asciidoctor-mermaid rouge
-
-# Install Node
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
 
 # Install Node packages
 sudo npm install -g @mermaid-js/mermaid-cli
@@ -77,7 +97,6 @@ cargo install diesel_cli --no-default-features --features postgres
 
 ### Clone and Build rfd-api
 
-
 ```
 sudo mkdir -p /opt/rfd-api
 sudo chown $USER:$USER /opt/rfd-api
@@ -86,14 +105,17 @@ cd /opt/rfd-api
 cargo build --release
 ```
 
-### Create the database and run migrations
+## Create the database and run migrations
 
-Create the db
-```
-DATABASE_URL="postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:25060/rfd?sslmode=require" diesel database create
+Create a hosted postgres database at https://cloud.digitalocean.com/databases. Use PostgreSQL 14.
+
+### Create the db
+
+```bash
+psql "postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:25060/defaultdb?sslmode=require" -c "CREATE DATABASE rfd;"
 ```
 
-Run migrations
+### Run migrations
 
 rfd-installer runs v-api migrations
 ```
@@ -105,7 +127,13 @@ DATABASE_URL="postgres://user:pass@private-<do-db-server-name>.g.db.ondigitaloce
 
 ### Setup Config Files
 
-Generate RSA Key Pair for JWT Signing
+There are 3 config files we need to setup:
+
+1. `rfd-api/config.toml`
+2. `rfd-api/mappers.toml`
+3. `rfd-processor/config.toml`
+
+#### Generate RSA Key Pair for JWT Signing
 
 On your local:
 ```
@@ -113,28 +141,20 @@ openssl genrsa -out private.pem 2048
 openssl rsa -in private.pem -pubout -out public.pem
 ```
 
-These files we will be configuring:
-
-```
-rfd-api/config.toml
-rfd-api/mappers.toml
-rfd-processor/config.toml
-```
-
-Copy example
+#### Copy example
 
 ```
 cd rfd-api
 cp config.example.toml config.toml
 ```
 
-Edit config.toml
+#### Edit config.toml
 
 ```
 vim config.toml
 ```
 
-Remove cloud key section
+#### Remove cloud key section
 
 Find the `[[keys]]` section and remove the `# CLOUD KMS - Signer` section. For this guide we will be using a local key.
 
@@ -163,10 +183,6 @@ public = """
 """
 ```
 
-### Setup DNS
-
-Point the domain you want to use to the Digital Ocean Droplet.
-
 ### Setup GitHub OAuth App
 
 ```
@@ -176,10 +192,10 @@ client_secret = ""
 redirect_uri = "https://<rfd-api-hostname>/login/oauth/github/code/callback"
 ```
 
-### Setup a github repo for RFDs
+### Setup a private GitHub repo for the RFDs
 
 ```
-git@github.com:oblakeerickson/rfd2.git
+git@github.com:oblakeerickson/rfd.git
 ```
 
 Then add it to the config file:
@@ -203,19 +219,19 @@ contents, metadata, Pull requests (write access?)
 
 delete the other `[services.github.auth]` section so that there is only one in the config file.
 
-# Mappers
+### Mappers
 
 ```
 cp mappers.example.toml mappers.toml
 ```
 
-Edit `config.toml` to point to the mappers file:
+#### Edit `config.toml` to point to the mappers file:
 
 ```
 initial_mappers = "/opt/rfd-api/rfd-api/mappers.toml"
 ```
 
-Edit `mappers.toml`:
+#### Edit `mappers.toml`:
 
 ```
 vim mappers.toml
@@ -279,8 +295,10 @@ groups = [
 
 ### Configure path for openapi spec file
 
+Comment out the `output_path` line in `config.toml`:
+
 ```
-output_path = "/opt/rfd-api/spec/openapi.json"
+# output_path = "/opt/rfd-api/spec/openapi.json"
 ```
 
 ### Configure reverse proxy
@@ -289,7 +307,6 @@ output_path = "/opt/rfd-api/spec/openapi.json"
 Install caddy:
 
 ```
-sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
 sudo apt update
