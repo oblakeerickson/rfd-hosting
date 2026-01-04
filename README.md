@@ -120,9 +120,12 @@ psql "postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:2
 rfd-installer runs v-api migrations
 ```
 cd rfd-model
-V_ONLY=1 DATABASE_URL="postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:25060/rfd?sslmode=require" cargo run -p rfd-installer
+V_ONLY=1 \
+DATABASE_URL="postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:25060/rfd?sslmode=require" \
+cargo run -p rfd-installer
 
-DATABASE_URL="postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:25060/rfd?sslmode=require" diesel migration run
+DATABASE_URL="postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:25060/rfd?sslmode=require" \
+diesel migration run
 ```
 
 ### Setup Config Files
@@ -144,7 +147,7 @@ openssl rsa -in private.pem -pubout -out public.pem
 #### Copy example
 
 ```
-cd rfd-api
+cd /opt/rfd-api/rfd-api
 cp config.example.toml config.toml
 ```
 
@@ -154,14 +157,47 @@ cp config.example.toml config.toml
 vim config.toml
 ```
 
+#### Basic settings
+
+```toml
+log_format = "pretty"
+# log_directory = "/var/log/rfd-api"  # Comment out to use stdout
+public_url = "https://rfd-api.yourdomain.com"
+server_port = 8080
+database_url = "postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:25060/rfd?sslmode=require"
+```
+
+Comment out or remove the entire `[spec]` section:
+
+```toml
+# [spec]
+# title = ""
+# description = ""
+# contact_url = ""
+# contact_email = ""
+# output_path = ""
+```
+
+#### Disable magic link authentication
+
+Add this section to disable passwordless email login (not needed for GitHub OAuth):
+
+```toml
+[magic_link]
+templates = []
+```
+
 #### Remove cloud key section
 
-Find the `[[keys]]` section and remove the `# CLOUD KMS - Signer` section. For this guide we will be using a local key.
+Find the `[[keys]]` section and remove the `# Cloud KMS - Signer` and `# Cloud KMS - Verifier` sections. For this guide we will be using a local key.
+
+On your local:
 
 ```
 cat private.pem | pbcopy
-cat public.pem | pbcopy
 ```
+
+Add the private key to the config.toml file on the droplet:
 
 ```
 [[keys]]
@@ -172,7 +208,17 @@ private = """
 ...
 -----END PRIVATE KEY-----
 """
+```
 
+On your local:
+
+```
+cat private.pem | pbcopy
+```
+
+Add the public key to the config.toml file on the droplet:
+
+```
 [[keys]]
 kind = "local_verifier"
 kid = "rfd-key-1"
@@ -183,7 +229,16 @@ public = """
 """
 ```
 
-### Setup GitHub OAuth App
+### Setup GitHub OAuth App for Web
+
+Visit https://github.com/settings/developers and create a new OAuth App.
+
+- Application name: `RFD SITE`
+- Homepage URL: `https://rfd.yourdomain.com`
+- Authorization callback URL: `https://rfd-api.yourdomain.com/login/oauth/github/code/callback`
+- Enable Device flow: `false`
+
+Then add the client id and client secret to the config file:
 
 ```
 [authn.oauth.github.web]
@@ -192,10 +247,29 @@ client_secret = ""
 redirect_uri = "https://<rfd-api-hostname>/login/oauth/github/code/callback"
 ```
 
-### Setup a private GitHub repo for the RFDs
+### Setup GitHub OAuth App for CLI
+
+Visit https://github.com/settings/developers and create a new OAuth App.
+
+- Application name: `RFD CLI`
+- Homepage URL: `https://rfd.yourdomain.com`
+- Authorization callback URL: `https://rfd-api.yourdomain.com/login/oauth/github/code/callback` (not used, but required)
+- Enable Device flow: `true`
+
+Then add the client id and client secret to the config file:
 
 ```
-git@github.com:oblakeerickson/rfd.git
+[authn.oauth.github.device]
+client_id = ""
+client_secret = ""
+```
+
+### Setup a private GitHub repo for the RFDs
+
+Go to GitHub.com and create a new private GitHub repo for the RFDs.
+
+```
+git@github.com:<your-username-or-org>/rfd.git
 ```
 
 Then add it to the config file:
@@ -206,29 +280,42 @@ Then add it to the config file:
 # GitHub user or organization
 owner = ""
 # GitHub repository name
-repo = ""
+repo = "rfd"
 # Path within the repository where RFDs are stored
-path = ""
+path = "rfd"
 # Branch to use as the default branch of the repository
-default_branch = ""
+default_branch = "main"
 ```
 
-Setup up Fine-grained personal access tokens
+#### Setup up Fine-grained personal access tokens
 
-contents, metadata, Pull requests (write access?)
+Go to https://github.com/settings/personal-access-tokens and create a new Fine-grained personal access token for the private RFD repo.
 
-delete the other `[services.github.auth]` section so that there is only one in the config file.
+**Required Permissions:**
+- **Contents**: Read and write (to read/write RFD files)
+- **Metadata**: Read-only (required for all tokens)
+- **Pull requests**: Read and write (to create/update PRs for RFD changes)
+
+```
+# Access Token
+[services.github.auth]
+token = "<your-access-token>"
+```
+
+Delete the other `[services.github.auth]` section (the App Installation one) so that there is only one in the config file.
 
 ### Mappers
-
-```
-cp mappers.example.toml mappers.toml
-```
 
 #### Edit `config.toml` to point to the mappers file:
 
 ```
 initial_mappers = "/opt/rfd-api/rfd-api/mappers.toml"
+```
+
+That should be the last thing in `config.toml`. Now let's copy the example mappers file:
+
+```
+cp mappers.example.toml mappers.toml
 ```
 
 #### Edit `mappers.toml`:
@@ -293,25 +380,64 @@ groups = [
 ]
 ```
 
-### Configure path for openapi spec file
+### Setup rfd-processor config
 
-Comment out the `output_path` line in `config.toml`:
+```bash
+cd /opt/rfd-api/rfd-processor
+cp config.example.toml config.toml
+vim config.toml
+```
 
+Update the following settings:
+
+```toml
+log_format = "pretty"
+
+# Set to "write" when ready to persist changes, use "read" for testing
+processor_update_mode = "read"
+
+# Database connection (same as rfd-api)
+database_url = "postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:25060/rfd?sslmode=require"
+
+# Enable GitHub-related actions (for basic setup without GCP/Google Drive/Meilisearch)
+actions = [
+  "CreatePullRequest",
+  "UpdatePullRequest",
+  "UpdateDiscussionUrl",
+  "EnsureRfdWithPullRequestIsInValidState",
+  "EnsureRfdOnDefaultIsInValidState",
+]
+
+# GitHub access token (same token as rfd-api)
+[auth.github]
+token = "<your-access-token>"
+
+# GitHub repo settings (same as rfd-api)
+[source]
+owner = "<your-username-or-org>"
+repo = "rfd"
+path = "rfd"
+default_branch = "main"
 ```
-# output_path = "/opt/rfd-api/spec/openapi.json"
-```
+
+**Actions reference:**
+
+| Action | Requires | Description |
+|--------|----------|-------------|
+| `CopyImagesToStorage` | `[[static_storage]]` (GCP bucket) | Copies images from RFDs to cloud storage |
+| `UpdateSearch` | `[[search_storage]]` (Meilisearch) | Indexes RFD content for search |
+| `UpdatePdfs` | `[pdf_storage]` (Google Drive) | Generates PDFs of RFDs |
+| `CreatePullRequest` | GitHub token | Creates PRs for new RFDs |
+| `UpdatePullRequest` | GitHub token | Updates existing RFD PRs |
+| `UpdateDiscussionUrl` | GitHub token | Updates discussion links in RFDs |
+| `EnsureRfdWithPullRequestIsInValidState` | GitHub token | Validates RFD state on PRs |
+| `EnsureRfdOnDefaultIsInValidState` | GitHub token | Validates RFD state on main branch |
+
+Delete the App Installation `[auth.github]` section (keep only the token-based one).
+
+Comment out or remove the `[[static_storage]]`, `[pdf_storage]`, and `[[search_storage]]` sections if you're not using those features.
 
 ### Configure reverse proxy
-
-
-Install caddy:
-
-```
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-sudo apt update
-sudo apt install caddy
-```
 
 Configure Caddy:
 
@@ -322,29 +448,138 @@ sudo vim /etc/caddy/Caddyfile
 Replace contents with:
 
 ```
-rfd2-api.blake.app {
+rfd-api.yourdomain.com {
     reverse_proxy localhost:8080
 }
 ```
 
-Verify it is working by visiting:
+Verify the config and restart Caddy:
 
-```
-https://rfd2-api.blake.app/.well-known/openid-configuration
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl restart caddy
 ```
 
-and you should see json output.
+### Start rfd-api
+
+Start the server (it automatically looks for `rfd-api/config.toml`):
+
+```bash
+cd /opt/rfd-api
+./target/release/rfd-api
+```
+
+The first run loads the mappers/groups into the database. Verify they were created:
+
+```bash
+psql "postgres://user:pass@private-<do-db-server-name>.g.db.ondigitalocean.com:25060/rfd?sslmode=require" \
+  -c "SELECT name, permissions FROM access_groups;"
+```
+
+You should see your `admin` group with the permissions you defined.
+
+Now save the original mappers file and replace it with an empty one to prevent conflicts on restart:
+
+```bash
+mv rfd-api/mappers.toml rfd-api/mappers.toml.loaded
+cat > rfd-api/mappers.toml << 'EOF'
+groups = []
+mappers = []
+EOF
+```
+
+Restart rfd-api to verify it starts without errors:
+
+```bash
+./target/release/rfd-api
+```
+
+Verify it is working (run locally on the droplet):
+
+```bash
+curl http://localhost:8080/.well-known/openid-configuration
+```
+
+You should see JSON output. Once that works, verify HTTPS is working:
+
+```bash
+curl https://rfd-api.yourdomain.com/.well-known/openid-configuration
+```
+
+### Run rfd-api as a systemd service
+
+Create a systemd service file:
+
+```bash
+sudo vim /etc/systemd/system/rfd-api.service
+```
+
+Add the following:
+
+```ini
+[Unit]
+Description=RFD API Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/rfd-api
+ExecStart=/opt/rfd-api/target/release/rfd-api
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable rfd-api
+sudo systemctl start rfd-api
+```
+
+Check the status:
+
+```bash
+sudo systemctl status rfd-api
+```
+
+View logs:
+
+```bash
+sudo journalctl -u rfd-api -f
+```
 
 # Deploy rfd-site to Vercel
 
+## Create OAuth client
+
 First we need to create an OAuth client in the rfd-api so the site can authenticate users.
 
+From your local machine, clone the rfd-api repo and install the CLI:
+
+```bash
+cd ~/code
+git clone https://github.com/oxidecomputer/rfd-api.git
+cd rfd-api
+cargo install --path rfd-cli
 ```
-rfd-cli config set host https://rfd2-api.blake.app
+
+This installs `rfd-cli` to `~/.cargo/bin` which should already be in your PATH.
+
+Configure the CLI to point to your rfd-api server:
+
+```bash
+rfd-cli config set host https://rfd-api.yourdomain.com
 ```
 You should see: `Configuration updated`
 
-```
+Login via GitHub:
+
+```bash
 rfd-cli auth login github
 ```
 
@@ -358,15 +593,97 @@ Configuration updated
 
 Now create the OAuth client:
 
-```
+```bash
 # 1. Create the OAuth client
 rfd-cli sys oauth create
 # Returns: {"id":"<client-id>", ...}
 
 # 2. Add redirect URI
-rfd-cli sys oauth redirect create --client-id <client-id> --redirect-uri "https://rfd2.blake.app/auth/github/callback"
+rfd-cli sys oauth redirect create --client-id <client-id> --redirect-uri "https://rfd.yourdomain.com/auth/github/callback"
 
 # 3. Create client secret
 rfd-cli sys oauth secret create --client-id <client-id>
 # Returns the secret to use in Vercel
 ```
+
+Save the client ID and secret - you'll need them for Vercel.
+
+## Fork and deploy rfd-site
+
+Fork the `oxidecomputer/rfd-site` repo to your GitHub account:
+
+```bash
+cd ~/code
+gh repo fork oxidecomputer/rfd-site --clone --fork-name my-rfd-site
+cd my-rfd-site
+```
+
+Or via GitHub web UI: visit https://github.com/oxidecomputer/rfd-site and click "Fork", then customize the repository name.
+
+Install the Vercel CLI and deploy:
+
+```bash
+npm i -g vercel
+vercel
+```
+
+When prompted:
+- **Set up and deploy?** → Yes
+- **Which scope?** → Select your account/team
+- **Link to existing project?** → No (for new project)
+- **Project name?** → Enter your project name
+- **Detected a repository. Connect it?** → **No** (avoids git author issues)
+- **Modify settings?** → No
+
+## Configure Environment Variables
+
+In the Vercel dashboard (or via CLI), add these environment variables:
+
+| Variable | Value |
+|----------|-------|
+| `RFD_API` | `https://rfd-api.yourdomain.com` |
+| `RFD_API_CLIENT_ID` | `<client id from step 1>` |
+| `RFD_API_CLIENT_SECRET` | `<secret key from step 3>` |
+| `RFD_API_GITHUB_CALLBACK_URL` | `https://rfd.yourdomain.com/auth/github/callback` |
+| `SESSION_SECRET` | `<random string, e.g. openssl rand -hex 32>` |
+
+Or via CLI:
+
+```bash
+# Generate a session secret
+openssl rand -hex 32
+
+vercel env add RFD_API
+vercel env add RFD_API_CLIENT_ID
+vercel env add RFD_API_CLIENT_SECRET
+vercel env add RFD_API_GITHUB_CALLBACK_URL
+vercel env add SESSION_SECRET
+```
+
+## Set Custom Domain
+
+Add a custom domain via CLI:
+
+```bash
+vercel domains add rfd.yourdomain.com
+```
+
+Then add an A record in your DNS provider (e.g., DigitalOcean):
+
+| Type | Hostname | Value |
+|------|----------|-------|
+| A | rfd | 76.76.21.21 |
+
+Note: `76.76.21.21` is Vercel's standard IP for all custom domains.
+
+Vercel will verify the domain and send you an email when it's ready.
+
+## Redeploy
+
+After adding environment variables, trigger a redeploy:
+
+```bash
+vercel --prod
+```
+
+Your RFD site should now be live at `https://rfd.yourdomain.com`!
