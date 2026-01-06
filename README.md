@@ -686,15 +686,16 @@ In the Vercel dashboard (or via CLI), add these environment variables to the pro
 Or via CLI:
 
 ```bash
-# Generate a session secret
-openssl rand -hex 32
+# Generate a session secret first
+SESSION_SECRET=$(openssl rand -hex 32)
+echo "SESSION_SECRET: $SESSION_SECRET"
 
-vercel env add SESSION_SECRET
-vercel env add RFD_API
-vercel env add RFD_API_CLIENT_ID
-vercel env add RFD_API_CLIENT_SECRET
-vercel env add RFD_API_GITHUB_CALLBACK_URL
-
+# Add each environment variable (you'll be prompted for values)
+vercel env add SESSION_SECRET           # paste the generated secret above
+vercel env add RFD_API                  # https://rfd-api.yourdomain.com
+vercel env add RFD_API_CLIENT_ID        # client id from OAuth client creation
+vercel env add RFD_API_CLIENT_SECRET    # secret from OAuth client creation
+vercel env add RFD_API_GITHUB_CALLBACK_URL  # https://rfd.yourdomain.com/auth/github/callback
 ```
 
 ## Set Custom Domain
