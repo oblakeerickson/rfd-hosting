@@ -396,6 +396,7 @@ permissions = [
   "CreateRfd",
   "UpdateRfdsAssigned",
   "UpdateRfdsAll",
+  "ManageRfdsVisibilityAll",
   "GetDiscussionsAssigned",
   "GetDiscussionsAll",
   "SearchRfds",
@@ -459,6 +460,68 @@ default_branch = "main"
 Delete the App Installation `[auth.github]` section (keep only the token-based one).
 
 Comment out or remove the `[[static_storage]]`, `[pdf_storage]`, and `[[search_storage]]` sections if you're not using those features.
+
+### Setup GitHub Webhook (Optional but Recommended)
+
+GitHub webhooks allow the rfd-api to immediately process RFD changes when you push to your repository, instead of waiting for the scanner's 15-minute interval.
+
+#### Generate a webhook secret
+
+On your local machine, generate a random secret:
+
+```bash
+openssl rand -hex 32
+```
+
+Save this secret - you'll need it for both GitHub and the rfd-api systemd service.
+
+#### Configure the webhook in GitHub
+
+1. Go to your RFD repository on GitHub
+2. Navigate to **Settings** → **Webhooks** → **Add webhook**
+3. Configure the webhook:
+   - **Payload URL:** `https://rfd-api.yourdomain.com/github`
+   - **Content type:** `application/json`
+   - **Secret:** The secret you generated above
+   - **Which events?** Select "Just the push event"
+   - **Active:** Checked
+
+4. Click **Add webhook**
+
+#### Update the systemd service
+
+Edit the rfd-api service file to include the webhook secret:
+
+```bash
+sudo vim /etc/systemd/system/rfd-api.service
+```
+
+Update the `Environment` line with your actual secret:
+
+```ini
+Environment="GITHUB_WEBHOOK_KEY=your-actual-secret-from-above"
+```
+
+Then reload and restart:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart rfd-api
+```
+
+#### Verify webhook delivery
+
+After pushing a change to your RFD repo, check GitHub's webhook delivery history:
+
+1. Go to **Settings** → **Webhooks** → click your webhook
+2. Click **Recent Deliveries**
+3. Successful deliveries show a green checkmark with status 202
+
+You can also check the rfd-api logs:
+
+```bash
+sudo journalctl -u rfd-api -f
+```
 
 ### Configure reverse proxy
 
@@ -564,10 +627,14 @@ WorkingDirectory=/opt/rfd-api
 ExecStart=/opt/rfd-api/target/release/rfd-api
 Restart=on-failure
 RestartSec=5
+# Required for GitHub webhook signature verification (see "Setup GitHub Webhook" section)
+Environment="GITHUB_WEBHOOK_KEY=your-webhook-secret-here"
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+**Note:** Replace `your-webhook-secret-here` with the actual webhook secret you'll create in the "Setup GitHub Webhook" section below.
 
 Enable and start the service:
 
@@ -788,4 +855,77 @@ The processor will scan your GitHub repo and import the RFDs. Once complete, ref
 
 ```bash
 rfd-cli edit visibility --number 1 --visibility public
+```
+
+## Run rfd-processor as a systemd service
+
+The `rfd-processor` is designed to run as a long-running service with built-in intervals:
+
+- `scanner_interval` - how often to scan GitHub for RFD changes (default: 900 seconds / 15 minutes)
+- `processor_interval` - how often to process job batches (default: 30 seconds)
+
+### Create the service file
+
+```bash
+sudo vim /etc/systemd/system/rfd-processor.service
+```
+
+Add the following:
+
+```ini
+[Unit]
+Description=RFD Processor
+After=network.target rfd-api.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/rfd-api
+ExecStart=/opt/rfd-api/target/release/rfd-processor
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Enable and start the service
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable rfd-processor
+sudo systemctl start rfd-processor
+```
+
+### Check status
+
+```bash
+# View service status
+sudo systemctl status rfd-processor
+
+# View processor logs
+sudo journalctl -u rfd-processor -f
+```
+
+### Configure scan interval
+
+To change how often the processor scans GitHub, edit the processor config:
+
+```bash
+vim /opt/rfd-api/rfd-processor/config.toml
+```
+
+```toml
+# How often the processor scanner should check the remote GitHub repo for RFDs (in seconds)
+# Default: 900 (15 minutes). Adjust based on your repo size and GitHub rate limits.
+scanner_interval = 900
+
+# How often to select a batch of jobs to process (in seconds)
+processor_interval = 30
+```
+
+Then restart the service:
+
+```bash
+sudo systemctl restart rfd-processor
 ```
