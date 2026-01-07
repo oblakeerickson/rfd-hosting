@@ -319,26 +319,66 @@ path = "rfd"
 default_branch = "main"
 ```
 
-#### Setup up Fine-grained personal access tokens
+#### Setup a GitHub App
 
-Go to https://github.com/settings/personal-access-tokens and create a new Fine-grained personal access token for the private RFD repo.
+A GitHub App is required for the webhook integration. While you can use a Personal Access Token for basic functionality, webhooks will fail because the rfd-api expects the `installation` field in webhook payloads, which only GitHub Apps provide.
 
-Token Name: `rfd`
-Expiration: `No expiration` (oh whatever your tolerance for security is)
-Repository access: `Only select repositories` (select your private rfd repo)
+**Create the GitHub App:**
 
-**Required Permissions:**
-- **Contents**: Read and write (to read/write RFD files)
-- **Metadata**: Read-only (required for all tokens)
-- **Pull requests**: Read and write (to create/update PRs for RFD changes)
+1. Go to https://github.com/settings/apps/new (or for an org: `https://github.com/organizations/YOUR_ORG/settings/apps/new`)
 
-```
-# Access Token
+2. Fill in the basic information:
+   - **GitHub App name:** `RFD API` (must be unique across GitHub)
+   - **Homepage URL:** `https://rfd-api.yourdomain.com`
+
+3. Disable the Webhook for now (we'll configure it separately):
+   - **Active:** Unchecked (we'll enable after setup is complete)
+
+4. Set the required permissions under **Repository permissions:**
+   - **Contents:** Read and write
+   - **Metadata:** Read-only (automatically selected)
+   - **Pull requests:** Read and write
+
+5. Under **Where can this GitHub App be installed?**
+   - Select **Only on this account**
+
+6. Click **Create GitHub App**
+
+**Generate a private key:**
+
+1. After creating the app, scroll down to **Private keys**
+2. Click **Generate a private key**
+3. A `.pem` file will be downloaded - keep this safe!
+
+**Note the App ID:**
+
+At the top of the app settings page, note the **App ID** (a number like `123456`).
+
+**Install the App on your RFD repository:**
+
+1. In the left sidebar, click **Install App**
+2. Click **Install** next to your account
+3. Select **Only select repositories** and choose your RFD repo
+4. Click **Install**
+5. After installation, note the **Installation ID** from the URL: `https://github.com/settings/installations/INSTALLATION_ID`
+
+**Add to config.toml:**
+
+Copy the contents of the downloaded `.pem` file and add to your config:
+
+```toml
+# GitHub App Installation
 [services.github.auth]
-token = "<your-github-pat>"
+app_id = 123456
+installation_id = 789012
+private_key = """
+-----BEGIN RSA PRIVATE KEY-----
+... your private key contents ...
+-----END RSA PRIVATE KEY-----
+"""
 ```
 
-Delete the other `[services.github.auth]` section (the App Installation one) so that there is only one in the config file.
+Delete the `token = ""` line if present - you can only have one authentication method.
 
 ### Mappers
 
@@ -445,9 +485,15 @@ actions = [
   "EnsureRfdOnDefaultIsInValidState",
 ]
 
-# GitHub access token (same token as rfd-api)
+# GitHub App authentication (same as rfd-api)
 [auth.github]
-token = "<your-access-token>"
+app_id = 123456
+installation_id = 789012
+private_key = """
+-----BEGIN RSA PRIVATE KEY-----
+... your private key contents ...
+-----END RSA PRIVATE KEY-----
+"""
 
 # GitHub repo settings - use YOUR repo from the previous step
 [source]
@@ -457,13 +503,15 @@ path = "rfd"
 default_branch = "main"
 ```
 
-Delete the App Installation `[auth.github]` section (keep only the token-based one).
+Delete any `token = ""` line if present - use the same GitHub App authentication as rfd-api.
 
 Comment out or remove the `[[static_storage]]`, `[pdf_storage]`, and `[[search_storage]]` sections if you're not using those features.
 
-### Setup GitHub Webhook (Optional but Recommended)
+### Setup GitHub Webhook (Requires GitHub App)
 
 GitHub webhooks allow the rfd-api to immediately process RFD changes when you push to your repository, instead of waiting for the scanner's 15-minute interval.
+
+**Important:** Webhooks require a GitHub App. The rfd-api webhook endpoint expects an `installation` field in the webhook payload, which is only included when webhooks are sent from a GitHub App installation. Regular repository webhooks (from Personal Access Tokens) will fail with a parsing error.
 
 #### Generate a webhook secret
 
@@ -473,20 +521,22 @@ On your local machine, generate a random secret:
 openssl rand -hex 32
 ```
 
-Save this secret - you'll need it for both GitHub and the rfd-api systemd service.
+Save this secret - you'll need it for both the GitHub App and the rfd-api systemd service.
 
-#### Configure the webhook in GitHub
+#### Configure the webhook in your GitHub App
 
-1. Go to your RFD repository on GitHub
-2. Navigate to **Settings** → **Webhooks** → **Add webhook**
-3. Configure the webhook:
-   - **Payload URL:** `https://rfd-api.yourdomain.com/github`
-   - **Content type:** `application/json`
-   - **Secret:** The secret you generated above
-   - **Which events?** Select "Just the push event"
+1. Go to https://github.com/settings/apps and click on your RFD API app
+2. In the left sidebar, click **General**
+3. Scroll down to the **Webhook** section
+4. Configure the webhook:
    - **Active:** Checked
+   - **Webhook URL:** `https://rfd-api.yourdomain.com/github`
+   - **Webhook secret:** The secret you generated above
+5. Click **Save changes**
 
-4. Click **Add webhook**
+6. Under **Subscribe to events**, ensure **Push** is checked (this should be automatic based on the Contents permission)
+
+7. Click **Save changes**
 
 #### Update the systemd service
 
