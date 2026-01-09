@@ -1,0 +1,94 @@
+services:
+  # Optional: PostgreSQL database
+  # Enable with: docker compose --profile db up -d
+  postgres:
+    image: postgres:14
+    container_name: rfd-postgres
+    restart: unless-stopped
+    profiles:
+      - db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: rfd
+      POSTGRES_USER: rfd
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    networks:
+      - rfd-network
+
+  rfd-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rfd-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config/config.toml:/app/rfd-api/config.toml:ro
+      - ./config/mappers.toml:/app/rfd-api/mappers.toml:ro
+    environment:
+      - GITHUB_WEBHOOK_KEY=${GITHUB_WEBHOOK_KEY}
+    command: ["rfd-api"]
+    networks:
+      - rfd-network
+
+  rfd-processor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rfd-processor
+    restart: unless-stopped
+    volumes:
+      - ./config/processor-config.toml:/app/rfd-processor/config.toml:ro
+    command: ["rfd-processor"]
+    depends_on:
+      - rfd-api
+    networks:
+      - rfd-network
+
+  # Optional: rfd-site frontend (instead of Vercel)
+  # Enable with: docker compose --profile frontend up -d
+  rfd-site:
+    build:
+      context: .
+      dockerfile: Dockerfile.site
+    container_name: rfd-site
+    restart: unless-stopped
+    profiles:
+      - frontend
+    environment:
+      - RFD_API=http://rfd-api:8080
+      - RFD_API_CLIENT_ID=${RFD_API_CLIENT_ID}
+      - RFD_API_CLIENT_SECRET=${RFD_API_CLIENT_SECRET}
+      - RFD_API_GITHUB_CALLBACK_URL=${RFD_API_GITHUB_CALLBACK_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+    depends_on:
+      - rfd-api
+    networks:
+      - rfd-network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: rfd-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - rfd-api
+    networks:
+      - rfd-network
+
+networks:
+  rfd-network:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pgdata:

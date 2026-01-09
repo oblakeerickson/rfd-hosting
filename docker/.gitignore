@@ -1,0 +1,9 @@
+# Actual config files (contain secrets)
+config/config.toml
+config/mappers.toml
+config/processor-config.toml
+.env
+
+# Keep example files
+!config/*.example
+!.env.example

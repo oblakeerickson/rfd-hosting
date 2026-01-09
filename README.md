@@ -11,6 +11,30 @@ The current goal of this guide is to just learn how the rfd-api and rfd-site rep
 - https://github.com/oxidecomputer/rfd-api
 - https://github.com/oxidecomputer/rfd-site
 
+# Docker Deployment
+
+For a containerized setup, see the `docker/` directory. Quick start:
+
+```bash
+cd docker
+cp .env.example .env
+cp config/config.toml.example config/config.toml
+cp config/mappers.toml.example config/mappers.toml
+cp config/processor-config.toml.example config/processor-config.toml
+# Edit configs with your values, then:
+docker compose up -d
+```
+
+After first start, empty mappers to prevent conflicts: `echo -e "groups = []\nmappers = []" > config/mappers.toml`
+
+The Docker setup runs rfd-api, rfd-processor, and Caddy. Database should be hosted externally.
+
+---
+
+# Manual Deployment
+
+The following guide covers manual deployment on a VPS.
+
 # Accounts/Services you will need
 
 - GitHub Account

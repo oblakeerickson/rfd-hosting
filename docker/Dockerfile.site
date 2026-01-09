@@ -1,0 +1,27 @@
+# Build stage
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+# Clone rfd-site
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+RUN git clone https://github.com/oxidecomputer/rfd-site.git .
+
+# Install dependencies and build
+RUN npm ci
+RUN npm run build
+
+# Runtime stage
+FROM node:20-slim
+
+WORKDIR /app
+
+# Copy built app
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/build ./build
+COPY --from=builder /app/public ./public
+
+EXPOSE 3000
+
+CMD ["npm", "run", "start"]

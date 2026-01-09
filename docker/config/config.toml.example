@@ -1,0 +1,67 @@
+# RFD API Configuration
+# Copy this file to config.toml and fill in your values
+
+# External hosted database:
+database_url = "postgres://user:pass@your-db-host:25060/rfd?sslmode=require"
+# Or if using Docker postgres profile:
+# database_url = "postgres://rfd:${DB_PASSWORD}@postgres:5432/rfd"
+log_format = "pretty"
+public_url = "https://rfd-api.yourdomain.com"
+server_port = 8080
+initial_mappers = "/app/rfd-api/mappers.toml"
+
+# Disable magic link (email) authentication
+[magic_link]
+templates = []
+
+# JWT signing key - generate with: openssl genrsa -out private.pem 2048
+[[keys]]
+kind = "local_signer"
+kid = "rfd-key-1"
+private = """
+-----BEGIN PRIVATE KEY-----
+... your private key ...
+-----END PRIVATE KEY-----
+"""
+
+# JWT verification key - generate with: openssl rsa -in private.pem -pubout -out public.pem
+[[keys]]
+kind = "local_verifier"
+kid = "rfd-key-1"
+public = """
+-----BEGIN PUBLIC KEY-----
+... your public key ...
+-----END PUBLIC KEY-----
+"""
+
+# GitHub OAuth - Web (for rfd-site login)
+# Create at: https://github.com/settings/developers
+[authn.oauth.github.web]
+client_id = ""
+client_secret = ""
+redirect_uri = "https://rfd-api.yourdomain.com/login/oauth/github/code/callback"
+
+# GitHub OAuth - CLI (device flow for rfd-cli)
+# Create a separate OAuth App with device flow enabled
+[authn.oauth.github.device]
+client_id = ""
+client_secret = ""
+
+# GitHub Repository containing RFDs
+[services.github]
+owner = "your-org-or-username"
+repo = "rfd"
+path = "rfd"
+default_branch = "main"
+
+# GitHub App Authentication
+# Create at: https://github.com/settings/apps/new
+# Required permissions: Contents (R/W), Metadata (R), Pull requests (R/W)
+[services.github.auth]
+app_id = 123456
+installation_id = 789012
+private_key = """
+-----BEGIN RSA PRIVATE KEY-----
+... your GitHub App private key ...
+-----END RSA PRIVATE KEY-----
+"""

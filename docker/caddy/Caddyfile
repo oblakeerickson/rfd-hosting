@@ -1,0 +1,9 @@
+# RFD API
+rfd-api.yourdomain.com {
+    reverse_proxy rfd-api:8080
+}
+
+# RFD Site (uncomment if using frontend profile)
+# rfd.yourdomain.com {
+#     reverse_proxy rfd-site:3000
+# }

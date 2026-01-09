@@ -1,0 +1,46 @@
+# RFD Processor Configuration
+# Copy this file to processor-config.toml and fill in your values
+
+log_format = "json"
+
+# Set to "write" when ready to persist changes, use "read" for testing
+processor_update_mode = "write"
+
+# Database connection - should match rfd-api config
+# External hosted database:
+database_url = "postgres://user:pass@your-db-host:25060/rfd?sslmode=require"
+# Or if using Docker postgres profile:
+# database_url = "postgres://rfd:${DB_PASSWORD}@postgres:5432/rfd"
+
+# Scanner interval: how often to check GitHub for changes (seconds)
+# Default: 900 (15 minutes)
+scanner_interval = 900
+
+# Processor interval: how often to process job batches (seconds)
+processor_interval = 30
+
+# Actions to enable (basic setup without GCP/Google Drive/Meilisearch)
+actions = [
+  "CreatePullRequest",
+  "UpdatePullRequest",
+  "UpdateDiscussionUrl",
+  "EnsureRfdWithPullRequestIsInValidState",
+  "EnsureRfdOnDefaultIsInValidState",
+]
+
+# GitHub App Authentication - same credentials as rfd-api
+[auth.github]
+app_id = 123456
+installation_id = 789012
+private_key = """
+-----BEGIN RSA PRIVATE KEY-----
+... your GitHub App private key ...
+-----END RSA PRIVATE KEY-----
+"""
+
+# GitHub source repository
+[source]
+owner = "your-org-or-username"
+repo = "rfd"
+path = "rfd"
+default_branch = "main"
