@@ -13,6 +13,9 @@ RUN apt-get update && apt-get install -y \
 RUN git clone https://github.com/oxidecomputer/rfd-api.git .
 RUN cargo build --release -p rfd-api -p rfd-processor -p rfd-installer
 
+# Install diesel CLI
+RUN cargo install diesel_cli --no-default-features --features postgres
+
 # Runtime stage
 FROM debian:bookworm-slim
 
@@ -43,6 +46,10 @@ RUN npm install -g @mermaid-js/mermaid-cli
 COPY --from=builder /app/target/release/rfd-api /usr/local/bin/
 COPY --from=builder /app/target/release/rfd-processor /usr/local/bin/
 COPY --from=builder /app/target/release/rfd-installer /usr/local/bin/
+COPY --from=builder /usr/local/cargo/bin/diesel /usr/local/bin/
+
+# Copy migrations
+COPY --from=builder /app/rfd-model/migrations /app/rfd-model/migrations
 
 # Create directories for configs
 RUN mkdir -p /app/rfd-api /app/rfd-processor

@@ -1,9 +1,11 @@
 # RFD API
+# Replace with your actual API domain
 rfd-api.yourdomain.com {
     reverse_proxy rfd-api:8080
 }
 
-# RFD Site (uncomment if using frontend profile)
-# rfd.yourdomain.com {
-#     reverse_proxy rfd-site:3000
-# }
+# RFD Site
+# Replace with your actual site domain
+rfd.yourdomain.com {
+    reverse_proxy rfd-site:3000
+}

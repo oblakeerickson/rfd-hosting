@@ -3,21 +3,31 @@
 
 log_format = "json"
 
+# Controls if the processor should run
+processor_enabled = true
+
+# How many jobs should be processed at once
+processor_batch_size = 10
+
+# Maximum number of RFD jobs to process concurrently
+processor_capacity = 4
+
+# How often to select a batch of jobs to process (seconds)
+processor_interval = 30
+
 # Set to "write" when ready to persist changes, use "read" for testing
 processor_update_mode = "write"
 
-# Database connection - should match rfd-api config
-# External hosted database:
-database_url = "postgres://user:pass@your-db-host:25060/rfd?sslmode=require"
-# Or if using Docker postgres profile:
-# database_url = "postgres://rfd:${DB_PASSWORD}@postgres:5432/rfd"
+# Controls if the scanner should run
+scanner_enabled = true
 
 # Scanner interval: how often to check GitHub for changes (seconds)
 # Default: 900 (15 minutes)
 scanner_interval = 900
 
-# Processor interval: how often to process job batches (seconds)
-processor_interval = 30
+# Database connection - should match rfd-api config
+# For Docker postgres profile:
+database_url = "postgres://rfd:YOUR_DB_PASSWORD@postgres:5432/rfd"
 
 # Actions to enable (basic setup without GCP/Google Drive/Meilisearch)
 actions = [

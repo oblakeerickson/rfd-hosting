@@ -7,8 +7,14 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 RUN git clone https://github.com/oxidecomputer/rfd-site.git .
 
-# Install dependencies and build
+# Remove Vercel preset from config for Docker deployment
+RUN sed -i "s/import { vercelPreset } from '@vercel\/react-router\/vite'//" react-router.config.ts && \
+    sed -i "s/presets: \[vercelPreset()\],/presets: [],/" react-router.config.ts
+
+# Install dependencies
 RUN npm ci
+
+# Build
 RUN npm run build
 
 # Runtime stage
@@ -24,4 +30,4 @@ COPY --from=builder /app/public ./public
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+CMD ["npx", "react-router-serve", "./build/server/index.js"]

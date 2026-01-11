@@ -1,5 +1,14 @@
+# RFD Docker Compose Configuration
+#
+# For local builds on the server, use the build: sections as-is.
+# For pre-built images (recommended), comment out "build:" and uncomment "image:":
+#   # build:
+#   #   context: .
+#   #   dockerfile: Dockerfile
+#   image: rfd-api:latest
+
 services:
-  # Optional: PostgreSQL database
+  # PostgreSQL database
   # Enable with: docker compose --profile db up -d
   postgres:
     image: postgres:14
@@ -17,6 +26,8 @@ services:
       - rfd-network
 
   rfd-api:
+    # For pre-built images, comment out build: and use:
+    # image: rfd-api:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -28,12 +39,15 @@ services:
       - ./config/config.toml:/app/rfd-api/config.toml:ro
       - ./config/mappers.toml:/app/rfd-api/mappers.toml:ro
     environment:
+      - DATABASE_URL=postgres://rfd:${DB_PASSWORD}@postgres:5432/rfd
       - GITHUB_WEBHOOK_KEY=${GITHUB_WEBHOOK_KEY}
     command: ["rfd-api"]
     networks:
       - rfd-network
 
   rfd-processor:
+    # For pre-built images, comment out build: and use:
+    # image: rfd-api:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -41,15 +55,19 @@ services:
     restart: unless-stopped
     volumes:
       - ./config/processor-config.toml:/app/rfd-processor/config.toml:ro
+    environment:
+      - DATABASE_URL=postgres://rfd:${DB_PASSWORD}@postgres:5432/rfd
     command: ["rfd-processor"]
     depends_on:
       - rfd-api
     networks:
       - rfd-network
 
-  # Optional: rfd-site frontend (instead of Vercel)
+  # rfd-site frontend
   # Enable with: docker compose --profile frontend up -d
   rfd-site:
+    # For pre-built images, comment out build: and use:
+    # image: rfd-site:latest
     build:
       context: .
       dockerfile: Dockerfile.site
@@ -58,7 +76,8 @@ services:
     profiles:
       - frontend
     environment:
-      - RFD_API=http://rfd-api:8080
+      # RFD_API must be the PUBLIC URL, not internal docker hostname
+      - RFD_API=${RFD_API}
       - RFD_API_CLIENT_ID=${RFD_API_CLIENT_ID}
       - RFD_API_CLIENT_SECRET=${RFD_API_CLIENT_SECRET}
       - RFD_API_GITHUB_CALLBACK_URL=${RFD_API_GITHUB_CALLBACK_URL}

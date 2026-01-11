@@ -10,6 +10,9 @@ public_url = "https://rfd-api.yourdomain.com"
 server_port = 8080
 initial_mappers = "/app/rfd-api/mappers.toml"
 
+[jwt]
+default_expiration = 3600
+
 # Disable magic link (email) authentication
 [magic_link]
 templates = []
@@ -65,3 +68,10 @@ private_key = """
 ... your GitHub App private key ...
 -----END RSA PRIVATE KEY-----
 """
+
+# Search configuration (required even if not using search)
+# Leave empty if not using Meilisearch
+[search]
+host = ""
+key = ""
+index = ""
