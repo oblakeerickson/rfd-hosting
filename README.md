@@ -19,6 +19,12 @@ For a fully containerized setup with Docker, see **[DOCKER.md](DOCKER.md)**.
 
 This deploys rfd-api, rfd-processor, rfd-site, PostgreSQL, and Caddy all in Docker containers on a single server.
 
+## PR Preview Deployments
+
+For automatic preview deployments of RFD content on pull requests, see **[PR-PREVIEWS.md](PR-PREVIEWS.md)**.
+
+This uses rfd-site's `LOCAL_RFD_REPO` mode to preview RFDs without requiring an API or database.
+
 ## Manual Deployment
 
 The following guide covers manual deployment on a VPS (building from source, using Vercel for the frontend).
